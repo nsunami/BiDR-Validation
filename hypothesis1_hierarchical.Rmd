@@ -1,0 +1,81 @@
+---
+title: "Power Analysis for H1: Hierarchical Model"
+output: html_notebook
+---
+
+The goal of this project is to perform the a priori power analysis for the hypothesis 1 of my dissertation.
+
+The outcome variable will be dichotomous (a valid response in a taxonomy vs. not a valid response in a taxonomy).
+
+
+```{r}
+# # Dichotoumous Outcome, Hierarchical
+library(tidyverse)
+library(furrr)
+plan(multicore)
+
+num_simulations <- 1000
+target_sample_sizes <- seq(100, 500, 50)
+
+response_per_participants <- 2
+probability_valid <- seq(.90, 1, .05)
+h1_results_hierarchical <- expand_grid("Sample Size" = target_sample_sizes,
+                                       probability_valid)
+
+
+# Function to create a binomial sample with a given probability
+create_dichotomous_sample <- function(sample_size, probability){
+  rbinom(sample_size, 1, probability) 
+}
+
+h1_results_hierarchical <- h1_results_hierarchical %>%
+  mutate("Sample" = future_map2(`Sample Size`,
+                                probability_valid, ~ rbinom(.x, 1, .y))) %>%
+  mutate("Successes" = future_map_int(Sample, sum)) %>%
+  mutate("CI Object" = future_map2(Successes,
+                                   `Sample Size`,
+                                  ~binom.confint(.x,
+                                                 .y,
+                                                 conf.level = .05,
+                                                 # Use Agresti-Coull since this gives the most conservative value to extreme probabiltiy approaching 1
+                                                 methods = "ac")),
+         "Lower CI" = future_map_dbl(`CI Object`, function(x) x$lower))
+
+# Plot Results
+h1_results_hierarchical %>%
+  ggplot(aes(x = probability_valid,
+             y = `Lower CI`,
+             color = factor(`Sample Size`))) +
+  geom_line() +
+  geom_hline(yintercept = .99) +
+  geom_vline(xintercept = .99)
+
+#,
+#          "GLM" = future_map(`Sample`, ~ glm(.x ~ 1, family = "binomial")))
+```
+
+
+Simple binomial
+```{r}
+h1_results_simple_binomial <- expand_grid("Sample Size" = target_sample_sizes,
+                                       probability_valid) %>%
+  mutate(`rbinom Sample` =  future_map2(`Sample Size`,
+              probability_valid,
+              ~ rbinom(num_simulations,
+                       .x, .y)),
+         `Successes` = ,
+         `CIs` = future_map(`rbinom Sample`,
+                            ~ binom.confint()))
+
+
+
+rbinom(num_simulations,
+       target_sample_sizes,
+       probability_valid)
+
+# use binom.confint
+library(binom)
+binom.confint(x = 299,
+              n = 300)
+```
+
